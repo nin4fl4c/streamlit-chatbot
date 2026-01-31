@@ -1,50 +1,47 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. Nastavitev strani (Metapodatki in postavitev)
+# Konfiguracija strani
 st.set_page_config(page_title="GymGator Klepetalnik", layout="centered")
 
-# 2. Povezava na Gemini ključ (Varno pridobljeno iz Streamlit Secrets)
+# Povezava na ključ
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("Manjka API ključ v Secrets!")
+    st.stop()
+
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# 3. Nastavitev modela s polno potjo, da preprečimo NotFound napako
-# Dodali smo "models/" pred ime modela za boljšo združljivost
-model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash",
-    system_instruction="""
-    Ti si GymGator pomočnik, strokovnjak za fitnes in zdravo prehrano. 
-    Odgovarjaj izključno v slovenščini. Bodi motivacijski in prijazen. 
-    Če te kdo vpraša kaj, kar ni povezano s športom ali prehrano, 
-    vljudno odgovori, da si specializiran le za GymGator področje.
-    """
-)
+# Inicializacija modela - uporabili bomo samo ime, brez 'models/'
+# Knjižnica bo sama ugotovila pravo pot, če je verzija >= 0.8.0
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 st.title("🤖 GymGator Pomočnik")
 
-# 4. Upravljanje seje klepeta (Spomin chatbota)
+# Spomin seje
 if "chat_session" not in st.session_state:
-    st.session_state.chat_session = model.start_chat(history=[])
+    st.session_state.chat_session = model.start_chat(
+        history=[],
+    )
+    # Tukaj dodamo specializacijo neposredno v prvi ukaz, da bo 100% delalo
+    st.session_state.gym_rules = "Ti si GymGator pomočnik. Odgovarjaj v slovenščini o fitnesu. Če vprašanje ni o športu, zavrni."
 
-# Prikaz zgodovine vseh sporočil v trenutni seji
+# Prikaz zgodovine
 for message in st.session_state.chat_session.history:
     role = "assistant" if message.role == "model" else "user"
     with st.chat_message(role):
         st.markdown(message.parts[0].text)
 
-# 5. Interakcija z uporabnikom (Vnos in generiranje odgovora)
-if prompt := st.chat_input("Kako vam lahko GymGator pomaga danes?"):
-    # Takojšen prikaz uporabnikovega vprašanja
+# Vnos uporabnika
+if prompt := st.chat_input("Kako vam lahko pomagam?"):
     with st.chat_message("user"):
         st.markdown(prompt)
     
     try:
-        # Pošiljanje vprašanja AI modelu
-        response = st.session_state.chat_session.send_message(prompt)
+        # Pošljemo vprašanje skupaj s pravili, da model ne pozabi vloge
+        full_prompt = f"{st.session_state.gym_rules}\n\nUporabnik sprašuje: {prompt}"
+        response = st.session_state.chat_session.send_message(full_prompt)
         
-        # Prikaz odgovora chatbota
         with st.chat_message("assistant"):
             st.markdown(response.text)
-            
     except Exception as e:
-        # Prikaz prijaznejšega obvestila v primeru tehnične napake
-        st.error(f"Prišlo je do napake pri povezavi z GymGator strežnikom. Prosimo, poskusite znova. (Napaka: {e})")
+        st.error(f"Napaka pri generiranju odgovora. Poskusite osvežiti stran. Podrobnosti: {e}")
