@@ -1,56 +1,52 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 
 # 1. Konfiguracija strani
 st.set_page_config(page_title="GymGator Klepetalnik", layout="centered")
 
-# 2. Varna nastavitev API ključa
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("API ključ ni nastavljen v Secrets!")
+# 2. Inicializacija Groq klienta
+if "GROQ_API_KEY" not in st.secrets:
+    st.error("Manjka GROQ_API_KEY v Secrets!")
     st.stop()
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# 3. Pametna izbira modela
-# Poskusimo najprej najnovejšo pot, če ne gre, uporabimo stabilno rezervo
-try:
-    model = genai.GenerativeModel("gemini-1.5-flash")
-except:
-    model = genai.GenerativeModel("gemini-pro")
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 st.title("🤖 GymGator Pomočnik")
 
-# 4. Inicializacija seje klepeta
-if "chat_session" not in st.session_state:
-    st.session_state.chat_session = model.start_chat(history=[])
-    st.session_state.gym_rules = (
-        "Ti si GymGator pomočnik, strokovnjak za fitnes in zdravo prehrano. "
-        "Govori izključno v slovenščini. Če vprašanje ni povezano s športom, "
-        "prijazno zavrni odgovor."
-    )
+# 3. Nastavitev sistemskih navodil (specializacija)
+system_prompt = {
+    "role": "system",
+    "content": "Ti si GymGator pomočnik, strokovnjak za fitnes in zdravo prehrano. Odgovarjaj izključno v slovenščini. Bodi motivacijski in prijazen. Če te kdo vpraša kaj, kar ni povezano s športom ali prehrano, vljudno odgovori, da si specializiran le za GymGator področje."
+}
 
-# Prikaz zgodovine sporočil
-for message in st.session_state.chat_session.history:
-    role = "assistant" if message.role == "model" else "user"
-    with st.chat_message(role):
-        st.markdown(message.parts[0].text)
+# 4. Spomin klepeta
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# 5. Vnos uporabnika in odgovor
-if prompt := st.chat_input("Vprašaj GymGatorja..."):
+# Prikaz zgodovine
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# 5. Vnos uporabnika
+if prompt := st.chat_input("Kako vam lahko GymGator pomaga?"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
-    
+
+    # Generiranje odgovora preko Groq (Llama 3 model)
     try:
-        # Pošljemo vprašanje skupaj z navodili za vlogo
-        response = st.session_state.chat_session.send_message(
-            f"{st.session_state.gym_rules}\n\nUporabnik: {prompt}"
+        chat_completion = client.chat.completions.create(
+            messages=[system_prompt] + st.session_state.messages,
+            model="llama3-8b-8192",
         )
         
+        response_text = chat_completion.choices[0].message.content
+        
         with st.chat_message("assistant"):
-            # Očistimo odgovor morebitnih sistemskih navodil
-            answer = response.text.replace(st.session_state.gym_rules, "").strip()
-            st.markdown(answer)
-            
+            st.markdown(response_text)
+        
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        
     except Exception as e:
-        st.error("Nekaj je šlo narobe. Poskusite klikniti 'Reboot App' v nastavitvah Streamlita.")
-        st.info(f"Podrobnost: {e}")
+        st.error(f"Prišlo je do napake pri povezavi z Groq strežnikom: {e}")
