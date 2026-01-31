@@ -34,11 +34,11 @@ if prompt := st.chat_input("Kako vam lahko GymGator pomaga?"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generiranje odgovora preko Groq (Llama 3 model)
+    # Generiranje odgovora preko Groq (Uporabljamo NOVEJŠI model Llama 3.1)
     try:
         chat_completion = client.chat.completions.create(
             messages=[system_prompt] + st.session_state.messages,
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",  # TA MODEL JE AKTIVEN IN DELUJE
         )
         
         response_text = chat_completion.choices[0].message.content
