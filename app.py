@@ -11,7 +11,7 @@ if "GROQ_API_KEY" not in st.secrets:
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-st.title("🤖 GymGator Pomočnik")
+st.title("GymGator Pomočnik")
 
 # 3. Nastavitev sistemskih navodil (specializacija)
 system_prompt = {
